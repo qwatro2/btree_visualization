@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <stdexcept>
+#include <utility>
 #include "BTree.h"
 
 template<typename T>
@@ -358,4 +359,121 @@ void tree::BTree::remove_from_inner(const tree::BTree::NodePtr &node, int key) {
             root_->parent = nullptr;
         }
     }
+}
+
+tree::BTree::Iterator tree::BTree::begin() {
+    if (root_ == nullptr) {
+        throw std::runtime_error("дерево пустое");
+    }
+
+    std::stack<int> stack;
+    auto current_node = root_;
+
+    while (!current_node->is_leaf) {
+        current_node = current_node->children.front();
+        stack.push(0);
+    }
+
+    stack.push(0);
+
+    return {stack, current_node};
+}
+
+tree::BTree::Iterator tree::BTree::end() {
+    if (root_ == nullptr) {
+        throw std::runtime_error("дерево пустое");
+    }
+
+    std::stack<int> stack;
+    if (root_->is_leaf) {
+        stack.push(static_cast<int>(root_->keys.size()));
+    } else {
+        stack.push(static_cast<int>(root_->children.size()));
+    }
+
+    return { stack, root_};
+}
+
+tree::BTree::Iterator::Iterator(std::stack<int> &indexes, tree::BTree::NodePtr node) : indexes_path_(indexes),
+                                                                                       current_node_(std::move(node)),
+                                                                                       return_from_child_just_now_(
+                                                                                               false) {}
+
+int tree::BTree::Iterator::operator*() const {
+    auto index = indexes_path_.top();
+    if (return_from_child_just_now_) {
+        --index;
+    }
+    return current_node_->keys[index];
+}
+
+tree::BTree::Iterator &tree::BTree::Iterator::operator++() {
+    auto top_index = indexes_path_.top();
+    if (current_node_->is_leaf) {
+        if (top_index < current_node_->keys.size() - 1) {
+            ++indexes_path_.top();
+        } else {
+            while (true) {
+                if (current_node_->parent != nullptr) {
+                    current_node_ = current_node_->parent;
+
+                    indexes_path_.pop();
+                    ++indexes_path_.top();
+                    return_from_child_just_now_ = true;
+
+                    if (indexes_path_.top() < current_node_->children.size()) {
+                        break;
+                    }
+                } else {
+                    ++indexes_path_.top();
+                    break;
+                }
+            }
+        }
+    } else {
+        return_from_child_just_now_ = false;
+        if (top_index < current_node_->children.size()) {
+            current_node_ = current_node_->children[top_index];
+
+            while (!current_node_->is_leaf) {
+                current_node_ = current_node_->children.front();
+                indexes_path_.push(0);
+            }
+
+            indexes_path_.push(0);
+        } else {
+            while (true) {
+                if (current_node_->parent != nullptr) {
+                    current_node_ = current_node_->parent;
+
+                    indexes_path_.pop();
+                    ++indexes_path_.top();
+                    return_from_child_just_now_ = true;
+
+                    if (indexes_path_.top() < current_node_->children.size()) {
+                        break;
+                    }
+                } else {
+                    ++indexes_path_.top();
+                    break;
+                }
+            }
+        }
+    }
+
+    return *this;
+}
+
+bool tree::BTree::Iterator::operator==(const tree::BTree::Iterator &other) const {
+    auto this_shift = return_from_child_just_now_ ? indexes_path_.top() - 1 : indexes_path_.top();
+    auto this_iter = current_node_->keys.begin() + this_shift;
+
+    auto other_shift = other.return_from_child_just_now_ ? other.indexes_path_.top() - 1 : other.indexes_path_.top();
+    auto other_iter = other.current_node_->keys.begin() + other_shift;
+
+    return this_iter == other_iter;
+}
+
+bool tree::BTree::Iterator::operator!=(const tree::BTree::Iterator &other) const {
+    return !(operator==(other));
 }

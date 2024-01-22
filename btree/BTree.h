@@ -35,6 +35,24 @@ namespace tree {
 
         void remove_from_inner(const NodePtr &, int);
 
+        struct Iterator {
+        public:
+            Iterator(std::stack<int> &, NodePtr);
+
+            int operator*() const;
+
+            Iterator &operator++();
+
+            bool operator==(const Iterator &) const;
+
+            bool operator!=(const Iterator &) const;
+
+        private:
+            std::stack<int> indexes_path_;
+            NodePtr current_node_;
+            bool return_from_child_just_now_;
+        };
+
     public:
 
         explicit BTree(int);
@@ -42,8 +60,10 @@ namespace tree {
         void insert(int);
 
         void remove(int);
-    };
 
+        Iterator begin();
+        Iterator end();
+    };
 }
 
 #endif //BTREE_H
